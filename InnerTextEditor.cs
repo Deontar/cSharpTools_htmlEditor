@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace cSharpTools
 {
@@ -14,7 +15,6 @@ namespace cSharpTools
         private int currentIndexBITAGCLL = 0; // Tracks the current index for iteration on a BigTagCollection
         private int currentIndexTAGCLL = 0; // Tracks the current index for iteration on a TagCollection
 
-
         //VARIABLES PARA  DEPURACIÓN###################################################################
         private Log LogDebug;
         private bool enableDebugLog = false;
@@ -22,7 +22,6 @@ namespace cSharpTools
         private const string debugLogName = "InnerTextEditor";
         private const string debugLogFormat = "txt";
         //#############################################################################################
-
 
         /// <summary>
         /// -html: html a editar<br></br>
@@ -35,7 +34,7 @@ namespace cSharpTools
             // Create a regex pattern based on the provided tag name to match tags in the HTML
             foreach (string tag in tagsToReplace)
             {
-                this.patternList.Add($"<\\s*{tag}([^>]*)>(.*?)<\\/\\s*{tag}\\s*>");
+                this.patternList.Add($@"<\s*{tag}\b([^>]*)>(.*?)<\/\s*{tag}\s*>");
             }
 
             if (enableDebugLog)
@@ -44,12 +43,25 @@ namespace cSharpTools
             }
         }
 
-        public BigTagCollection GetBigTagCollection()
+        public BigTagCollection GetBigTagCollection(List<string> userPatternList = null)
         {
-            foreach (string pattern in this.patternList)
+            BigTagCollection bigTagCollection = new BigTagCollection();
+            List<string> localPatternList;
+
+            if (userPatternList != null)
             {
-                bigTagCollection.TagCollections.Add(GetTagCollection(pattern));
+                localPatternList = userPatternList;
             }
+            else
+            {
+                localPatternList = this.patternList;
+            }
+
+            // Find all the match collections
+            BigMatchCollection bigMatchCollection = new BigMatchCollection().Build(html, localPatternList);
+            // Build the BigTagCollection from the BigMatchCollection
+            bigTagCollection = bigTagCollection.Build(bigMatchCollection, html);
+            this.bigTagCollection = bigTagCollection;
             return bigTagCollection;
         }
 
@@ -67,9 +79,9 @@ namespace cSharpTools
             }
             // Find all matches using the regex pattern
             MatchCollection matchCollection = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            // Build the TagCollection from the matches
-            TagCollection tagCollection = TagCollection.Build(matchCollection, html);
-            return tagCollection;
+            // Build the TagCollection from the MatchCollection
+            TagCollection tagCollection = new TagCollection();
+            return tagCollection.Build(matchCollection, html);
         }
 
         /// <summary>
@@ -158,7 +170,7 @@ namespace cSharpTools
         /// <returns>inner text value of actuall bigTagcollection</returns>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        public string GetInnerNextText(TagCollection tagCollection = null, BigTagCollection bigTagCollection = null)
+        public string GetNextInnerText(TagCollection tagCollection = null, BigTagCollection bigTagCollection = null)
         {
             if (tagCollection != null)
             {
@@ -243,6 +255,41 @@ namespace cSharpTools
     }
 
     /// <summary>
+    /// Represents a collection of MatchCollections forund in the given text<br></br>
+    /// -matchCollection: //List of MatchCollections forund in the given text<br></br>
+    /// -Count: Number of MatchCollections in BigMatchCollection<br></br>
+    /// </summary>
+    public class BigMatchCollection
+    {
+        public List<MatchCollection> MatchCollection { get; set; } = new List<MatchCollection>(); //List of MatchCollections forund in the given text
+        public int Count { get; set; } = 0;
+
+        /// <summary>
+        /// Builds a BigMatchCollection object from a list of patterns and the text content<br></br>
+        /// -text: text to do a Regex pattern search<br></br>
+        /// -patternList: List of patters to apply to text<br></br>
+        /// </summary>
+        /// <returns></returns>
+        public BigMatchCollection Build(string text, List<string> patternList)
+        {
+            BigMatchCollection bigMatchCollection = new BigMatchCollection();
+
+            foreach (string pattern in patternList)
+            {
+                if(string.IsNullOrEmpty(pattern))
+                {
+                    throw new InvalidOperationException("pattern can not be null or empty");
+                }
+                MatchCollection matchCollection = Regex.Matches(text, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                bigMatchCollection.MatchCollection.Add(matchCollection);
+                bigMatchCollection.Count++;
+            }
+
+            return bigMatchCollection;
+        }
+    }
+
+    /// <summary>
     /// Represents a collection of TagCollections found in the HTML<br></br>
     /// -TagCollections: List of TagCollection of tags found in the HTML<br></br>
     /// -Count: Number of TagCollections in the collection<br></br>
@@ -258,14 +305,14 @@ namespace cSharpTools
         /// -html: html to analice<br></br>
         /// </summary>
         /// <returns></returns>
-        public static  BigTagCollection Build(List<string> patternList, string html)
+        public  BigTagCollection Build(BigMatchCollection bigMatchCollection, string html)
         {
             BigTagCollection bigTagCollection = new BigTagCollection();
-            foreach (string pattern in patternList)
+            
+            foreach (MatchCollection matchCollection in bigMatchCollection.MatchCollection)
             {
-                // Find all matches for the given pattern in the HTML
-                MatchCollection matchCollection = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                bigTagCollection.TagCollections.Add(TagCollection.Build(matchCollection, html));
+                TagCollection tagCollection = new TagCollection();
+                bigTagCollection.TagCollections.Add(tagCollection.Build(matchCollection, html));
                 bigTagCollection.Count++;
             }
             return bigTagCollection;
@@ -294,12 +341,13 @@ namespace cSharpTools
         /// group[1] = href='/central/nuevo<br></br>group[2] = nuevo servicio<br></br>
         /// </remarks>
         /// <returns>A fully builded TagCollection object</returns>
-        public static TagCollection Build(MatchCollection matchCollection, string html)
+        public TagCollection Build(MatchCollection matchCollection, string html)
         {
+            IndividualTag individualTag = new IndividualTag();
             TagCollection tagCollection = new TagCollection();
             foreach (Match match in matchCollection)
             {
-                tagCollection.Tag.Add(IndividualTag.Build(match, html));
+                tagCollection.Tag.Add(individualTag.Build(match, html));
                 tagCollection.Count++;
             }
             return tagCollection;
@@ -329,7 +377,7 @@ namespace cSharpTools
         /// group[1] = href='/central/nuevo<br></br>group[2] = nuevo servicio<br></br>
         /// </remarks>
         /// <returns>Fully builded IndividualTag object</returns>
-        public static IndividualTag Build(Match match, string html)
+        public IndividualTag Build(Match match, string html)
         {
             IndividualTag tagInEdit = new IndividualTag();
 
@@ -350,7 +398,7 @@ namespace cSharpTools
         /// </summary>
         /// <remarks>The text must also be in the match</remarks>
         /// <returns>Position in the html</returns>
-        public static int GetLineNumber(string text, int index)
+        public int GetLineNumber(string text, int index)
         {
             return text.Substring(0, index).Split('\n').Length;
         }
@@ -378,7 +426,7 @@ namespace cSharpTools
         /// group[1] = href='/central/nuevo<br></br>group[2] = nuevo servicio<br></br>
         /// </remarks>
         /// <returns>Fully builded InnerText object</returns>
-        public static InnerText Build(Match match)
+        public InnerText Build(Match match)
         {
             InnerText innerText = new InnerText();
             innerText.TagName = GetTagName(match.Value);
@@ -395,7 +443,7 @@ namespace cSharpTools
         /// Tag.Value to give: &lt;a href='/central/nuevo'&gt;nuevo servicio&lt;/a&gt;<br></br>
         /// </remarks>
         /// <returns>Name of the tag</returns>
-        public static string GetTagName(string tagValue)
+        public string GetTagName(string tagValue)
         {
             string patternName = @"(?<=<)\s*(\w+)";
             Match match = Regex.Match(tagValue, patternName);
@@ -420,7 +468,7 @@ namespace cSharpTools
         /// If a case succes then return<br></br>
         /// </remarks>
         /// <returns>Inner text</returns>
-        public static String GetTrueInnerText(String tagCompleteInnerText)
+        public String GetTrueInnerText(String tagCompleteInnerText)
         {
             //Original pattern (not code)   /^(.*?)\<[^<>]+\>.*$
             // CASE 1: Pattern to get text before a tag like text<test></test>

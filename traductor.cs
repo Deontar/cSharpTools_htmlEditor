@@ -31,7 +31,7 @@ namespace cSharpTools
 
         //VARIABLES PARA  DEPURACIÓN###################################################################
         private Log LogDebug;
-        private bool enableDebugLog = false;
+        private bool enableDebugLog = true;
         private const string debugLogPath = "C:/Debuger";
         private const string debugLogName = "debug";
         private const string debugLogFormat = "txt";
@@ -67,7 +67,7 @@ namespace cSharpTools
 
             if (enableDebugLog)
             {
-                this.LogDebug = new Log("C:/Debuger", "debug", "txt");
+                this.LogDebug = new Log(debugLogPath, debugLogName, debugLogFormat);
             }
         }
 
@@ -128,14 +128,13 @@ namespace cSharpTools
                 {
                     foreach (IndividualTag tag in tagCollection.Tag)
                     {
-                        string actualInnerText = tag.InnerText.ActualValue;
+                        string actualInnerText = tag.InnerText.ActualValue.ToLower().Trim();
                         int indexTranslate = IndexOfTextInArray(actualInnerText, referenceLang);
                         if (indexTranslate != -1)
                         {
-                            LogDebug?.Writte($"{referenceLang[indexTranslate].Trim().ToLower()} =? {actualInnerText.Trim().ToLower()}");
-                            if (referenceLang[indexTranslate].Trim().ToLower() == actualInnerText.Trim().ToLower())
+                            if (referenceLang[indexTranslate].ToLower().Trim() == actualInnerText)
                             {
-                                LogDebug?.Writte($"{actualInnerText.Trim().ToLower()} -> {translateLang[indexTranslate]}");
+                                LogDebug?.Writte($"{actualInnerText} -> {translateLang[indexTranslate]}");
                                 innerTextEditor.AddNewValue(actualInnerText, translateLang[indexTranslate]);
                             }
                             else
@@ -145,6 +144,7 @@ namespace cSharpTools
                         }
                         else
                         {
+                            LogDebug?.Writte($"\tNotTranslated:{actualInnerText}");
                             LogNotTranslated.WritteWeeklyLog(actualInnerText);
                         }
                     }
