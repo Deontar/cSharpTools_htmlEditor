@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,6 +9,7 @@ using System.Xml.Serialization;
 
 public class traductor
 {
+
     private string html;
     private string htmlTranslated;
     private string[] lang;
@@ -16,19 +18,28 @@ public class traductor
     private string[] referenceLang;
     private string[] translateLang;
 
-    private string[] tagsToTranslate = { "a", "label", "th", "h5"}; //MMM edu nuevos tags th y h5
-    private const string HtmlAttributes = "href|target|download|hreflang|rel|type|for|form|style|class|lang|role|tabindex|span";
+    //MMM edu nuevos tags th y h5
+    private string[] tagsToTranslate = { "a", "label", "th", "h1", "h2", "h3", "h4", "h5", "button", "th" };
+    private string[] htmlAttributes = { "href", "a", "label", "th", "h1", "h2", "h3", "h4", "h5", "button", "th" };
+    private string htmlAttributesRegex;
+    private string[] blackListedHtmlAtributes = { };
 
-    private int wordsIdentifiedCount = 0;
-    private int wordsTranslatedCount = 0;
-    private int wordsNotTranslatedCount = 0;
+    private int wordsIdentifiedCount;
+    private int wordsTranslatedCount;
+    private int wordsNotTranslatedCount;
     private List<string> translatedWords = new List<string>();
     private List<string> notTranslatedWords = new List<string>();
 
-    private Log LogTranslated;
     private Log LogNotTranslated;
     private Log LogErrors;
+
+    //VARIABLES PARA GENERAR ARCHIVOS DE DEPURACIÓN################################################
     private Log LogDebug;
+    private const bool enableDebugLog = false;
+    private const string debugLogPath = "C:/Debuger";
+    private const string debugLogName = "debug";
+    private const string debugLogFormat = "txt";
+    //#############################################################################################
 
     /* Procesa una etiqueta específica dentro del HTML usando Regex para identificar sus atributos y su contenido.
      Regex pattern explanation:
@@ -44,24 +55,35 @@ public class traductor
     /// - lang: Array de idiomas para referencia y traducción<br></br>
     /// - referenceLangNum: Índice del idioma de referencia en el array de idiomas<br></br>
     /// - translateLangNum: Índice del idioma al que se va a traducir en el array de idiomas<br></br>
-    /// - tagsToTranslate: Array de etiquetas HTML que se van a traducir. Si es null, se usarán las etiquetas predeterminadas<br></br>
     /// </summary>
-    public traductor(string html, string[] lang, int referenceLangNum, int translateLangNum, string[] tagsToTranslate = null)
+    public traductor(string html, string[] lang, int referenceLangNum, int translateLangNum)
     {
+        
         //MMM edu averiguar directorio de runtime y usarlo de prefijo del fichero
         string actuallDirectoryPath = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory);
-
         string translatedFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/translated");
         string notTranslatedFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/Nottranslated");
         string errorsFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/errors");
-        this.LogTranslated = new Log(translatedFilePath, "translated_words_", "txt");
+
         this.LogNotTranslated = new Log(notTranslatedFilePath, "NOT_translated_words_", "txt");
         this.LogErrors = new Log(errorsFilePath, "error_traductor", "txt");
 
         //Control de errores
-        if (lang == null) Console.WriteLine("El array de idiomas no puede ser nulo.");
-        else if (html == null) Console.WriteLine("El HTML no puede ser nulo.");
-        else if (referenceLangNum == translateLangNum) Console.WriteLine("El idioma de referencia no puede ser el mismo que el idioma de traducción.");
+        if (lang == null)
+        {
+            LogErrors.WritteWeeklyLog("El array de idiomas no puede ser nulo.");
+            return;
+        }
+        if (html == null)
+        {
+            LogErrors.WritteWeeklyLog("El HTML no puede ser nulo.");
+            return;
+        }
+        if (referenceLangNum == translateLangNum)
+        {
+            LogErrors.WritteWeeklyLog("El idioma de referencia no puede ser el mismo que el idioma de traducción.");
+            return;
+        }
 
         this.lang = lang;
         try
@@ -69,17 +91,50 @@ public class traductor
             this.referenceLangNum = referenceLangNum;
             this.translateLangNum = translateLangNum;
         }
-        catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return; }
+        catch (Exception e)
+        {
+            LogErrors.WritteWeeklyLog(e.ToString());
+            return;
+        }
 
         this.referenceLang = LangToIndividualArray(referenceLangNum);
         this.translateLang = LangToIndividualArray(translateLangNum);
-        if (tagsToTranslate != null) this.tagsToTranslate = tagsToTranslate;
         this.html = html;
         this.htmlTranslated = html;
+        htmlAttributesRegex = string.Join("|", htmlAttributes);
 
-        //ELIMINAR PARA PRUEBA EN VIVO----------
-        this.LogDebug = new Log("C:/Debuger", $"debug", "txt");
-        //ELIMINAR PARA PRUEBA EN VIVO----------
+        if (enableDebugLog)
+        {
+            this.LogDebug = new Log("C:/Debuger", $"debug", "txt");
+        }
+    }
+
+    /// <summary>
+    /// - tagsToTranslate: Array de tags HTML que se va a traducir. Si no se establece se usran las predeterminadas<br></br>
+    /// Default { "a", "label", "th", "h1", "h2", "h3", "h4", "h5", "button", "th" }
+    /// </summary>
+    public void SetTagsToTranslate(string[] tagsToTranslate)
+    {
+        this.tagsToTranslate = tagsToTranslate;
+    }
+
+    /// <summary>
+    /// - htmlAttributes: Array de atributos HTML que se va a traducir. Si no se establece se usran los predeterminados<br></br>
+    /// Default { "href", "a", "label", "th", "h1", "h2", "h3", "h4", "h5", "button", "th" };
+    /// </summary>
+    public void SetHtmlAttributes (string[] htmlAttributes)
+    {
+        htmlAttributesRegex = "";
+        this.htmlAttributes = htmlAttributes;
+        htmlAttributesRegex = string.Join("|", htmlAttributes);
+    }
+
+    /// <summary>
+    /// - blackListedHtmlAtributes: Array de atributos HTML que seran ignorados.<br></br>
+    /// </summary>
+    public void SetBlackListeAttributes(string[] blackListedHtmlAtributes)
+    {
+        this.blackListedHtmlAtributes = blackListedHtmlAtributes;
     }
 
     /// <summary>
@@ -90,27 +145,36 @@ public class traductor
     {
         try
         {
+            LogDebug?.Writte($"TranslateHTML START");
+            string tagsInString = null;
+            foreach (string tag in tagsToTranslate) { tagsInString += tag + " "; }
+            LogDebug?.Writte($"\t{tagsInString}");
+            //ELIMINAR PARA PRUEBA EN VIVO----------
             foreach (string tag in tagsToTranslate)
             {
+                LogDebug?.Writte($"\ttag:\t{tag}");
+
                 ProcessTag(tag);
             }
-
-            //ELIMINAR PARA PRUEBA EN VIVO----------
-            //Resumen de la traducción, SOLO USAR DURANTE DEPURACIÓN
-            LogDebug.WritteInLogDebug("\r\n--- Resumen de Traducción ---");
-            LogDebug.WritteInLogDebug($"Palabras identificadas: {wordsIdentifiedCount}");
-            LogDebug.WritteInLogDebug($"Palabras traducidas: {wordsTranslatedCount}");
-            LogDebug.WritteInLogDebug($"Palabras no traducidas: {wordsNotTranslatedCount}");
-            //ELIMINAR PARA PRUEBA EN VIVO----------
+                LogDebug?.Writte("\r\n--- Resumen de Traducción ---");
+                LogDebug?.Writte($"Palabras identificadas: {wordsIdentifiedCount}");
+                LogDebug?.Writte($"Palabras traducidas: {wordsTranslatedCount}");
+                LogDebug?.Writte($"Palabras no traducidas: {wordsNotTranslatedCount}");
+                LogDebug?.Writte(Environment.NewLine + Environment.NewLine + Environment.NewLine + Environment.NewLine);
 
             //NO TOCAR-----
-            LogTranslated.UniqueWords(translatedWords);
             LogNotTranslated.UniqueWords(notTranslatedWords);
             //NO TOCAR-----
 
             return htmlTranslated;
         }
         catch (Exception e){ LogErrors.WritteWeeklyLog(e.ToString());  return html; }
+        //ELIMINAR PARA PRUEBA EN VIVO----------
+        finally
+        {
+            LogDebug?.Writte($"TranslateHTML END");
+        }
+        //ELIMINAR PARA PRUEBA EN VIVO----------
     }
 
     /// <summary>
@@ -125,20 +189,26 @@ public class traductor
     {
         try
         {
+            LogDebug?.Writte($"\r\t\tProcesstag START");
             string pattern = $"<\\s*{tag}([^>]*)>(.*?)<\\/\\s*{tag}\\s*>";
-
             htmlTranslated = Regex.Replace(htmlTranslated, pattern, match =>
             {
+                LogDebug?.Writte($"\t\t\tpattern1:\t{pattern}");
+                LogDebug?.Writte($"\t\t\tmatch1:\t{match}");
+                LogDebug?.Writte($"\t\t\tatributes1:\t{match.Groups[1].Value}");
+                LogDebug?.Writte($"\t\t\tinnerText1:\t{match.Groups[2].Value}");
+
+                string attributes = match.Groups[1].Value;
+                string innerText = match.Groups[2].Value;
+                wordsIdentifiedCount++;
+                LogDebug?.Writte($"\t\t\tID:{wordsIdentifiedCount}");
+                decimal nbr;
                 try
                 {
-                    string attributes = match.Groups[1].Value;
-                    string originalText = match.Groups[2].Value;
-                    wordsIdentifiedCount++;
-                    decimal nbr;
-                    if (!decimal.TryParse(originalText, out nbr)) // MMMedu no traducir numeros
+                    if (!decimal.TryParse(innerText, out nbr)) // MMMedu no traducir numeros
                     {
-                        string updatedAttributes = ProcessAttributes(attributes);
-                        return TranslateText(tag, updatedAttributes, originalText, match);
+                        string updatedAttributes = TranslateInnerTextOfAtributes(attributes);
+                        return TranslateInnerTextOfTag(tag, updatedAttributes, innerText, match);
                     }
                     else
                     {
@@ -149,6 +219,12 @@ public class traductor
             }, RegexOptions.IgnoreCase | RegexOptions.Singleline);
         }
         catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); }
+        //ELIMINAR PARA PRUEBA EN VIVO----------
+        finally
+        {
+            LogDebug?.Writte($"\t\tProcesstag END" + Environment.NewLine + Environment.NewLine + Environment.NewLine);
+        }
+        //ELIMINAR PARA PRUEBA EN VIVO----------
     }
 
     /// <summary>
@@ -156,22 +232,40 @@ public class traductor
     /// - attributes: Los atributos de la etiqueta HTML
     /// </summary>
     /// <returns>Atributos traducidos.</returns>
-    private string ProcessAttributes(string attributes)
+    private string TranslateInnerTextOfAtributes(string attributes)
     {
         try
         {
-            return Regex.Replace(attributes, @"(\b(?:" + HtmlAttributes + @")\s*=\s*"")([^""]+)(\""|\')", attrMatch =>
+            LogDebug?.Writte($"\r\t\t\t\tTranslateInnerTextOfAtributes START");
+            string pattern = @"(\b(?:" + htmlAttributesRegex + @")\s*=\s*"")([^""]+)(\""|\')";
+            return Regex.Replace(attributes, pattern, attrMatch =>
             {
+                LogDebug?.Writte($"\t\t\t\t\treferenceText:\t{attributes}");
+                LogDebug?.Writte($"\t\t\t\t\tpattern2:\t{pattern}");
+                LogDebug?.Writte($"\t\t\t\t\tMatch2:\t{attrMatch}");
+                LogDebug?.Writte($"\t\t\t\t\tatributes2:\t{attrMatch.Groups[1].Value}");
+                LogDebug?.Writte($"\t\t\t\t\tinnerText2:\t{attrMatch.Groups[2].Value}");
+
+                string attributeName = attrMatch.Groups[1].Value;
+                string attributeValue = attrMatch.Groups[2].Value;
+                //Early leave si encuentra un atributo de la lista negra en el attrMatch.Value (lo que ha encontrado)
+                if (Array.Exists(blackListedHtmlAtributes, attr => attr.Equals(attrMatch.Value, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return attrMatch.Value;
+                }
                 try
                 {
-                    string attributeName = attrMatch.Groups[1].Value;
-                    string attributeValue = attrMatch.Groups[2].Value;
 
-                    int attrIndex = Array.FindIndex(referenceLang, text => text.Trim().ToLower() == attributeValue.ToLower());
+                    int attrIndex = Array.FindIndex(referenceLang, text => text.Trim().ToLower() == attributeValue.Trim().ToLower());
                     if (attrIndex != -1 && attrIndex < translateLang.Length && !string.IsNullOrWhiteSpace(attributeValue))
                     {
                         string translatedAttrValue = translateLang[attrIndex];
                         return $"{attributeName}{translatedAttrValue}{attrMatch.Groups[3].Value}";
+                    }
+                    else
+                    {
+                        notTranslatedWords.Add(attributeValue.Trim().ToLower());
+                        wordsNotTranslatedCount++;
                     }
                     return attrMatch.Value;
                 }
@@ -179,6 +273,10 @@ public class traductor
             }, RegexOptions.IgnoreCase);
         }
         catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
+        finally
+        {
+            LogDebug?.Writte($"\t\t\t\tTranslateInnerTextOfAtributes END");
+        }
     }
 
     /// <summary>
@@ -189,26 +287,45 @@ public class traductor
     /// - match: La coincidencia de la etiqueta HTML en el contenido
     /// </summary>
     /// <returns>Texto traducido junto con la etiqueta HTML</returns>  
-    private string TranslateText(string tag, string updatedAttributes, string originalText, Match match)
+    private string TranslateInnerTextOfTag(string tag, string updatedAttributes, string innerText, Match match)
     {
+        string originalText = innerText;
+        LogDebug?.Writte($"\r\t\t\t\tTranslateInnerTextOfTag START");
         try
         {
-            int index = Array.FindIndex(referenceLang, text => text.Trim().ToLower() == originalText.ToLower());
+            //Obtiene el indice de referenceLang con el texto originalText que coincida con el primer resultado de referenceLang
+            int index = Array.FindIndex(referenceLang, text => text.Trim().ToLower() == originalText.Trim().ToLower());
             if (index != -1 && index < translateLang.Length && !string.IsNullOrWhiteSpace(originalText))
             {
                 string translatedText = translateLang[index];
                 translatedWords.Add(originalText);
                 wordsTranslatedCount++;
+
+                LogDebug?.Writte($"\t\t\t\t\t{originalText} = {translateLang[index]}");
+
                 return $"<{tag}{updatedAttributes}>{translatedText}</{tag}>";
             }
             else
             {
-                notTranslatedWords.Add(originalText);
+                notTranslatedWords.Add(originalText.Trim().ToLower());
                 wordsNotTranslatedCount++;
                 return match.Value;
             }
         }
         catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
+        finally
+        {
+            LogDebug?.Writte($"\t\t\t\tTranslateInnerTextOfTag END");
+        }
+    }
+
+
+    private bool checkForBlackListed(string text)
+    {
+        foreach (string atribute in blackListedHtmlAtributes) {
+            if (text.Contains(atribute)) return true;
+        }
+        return false;
     }
 
     /// <summary>
