@@ -1,12 +1,7 @@
-﻿using cSharpTools;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml.Serialization;
 
 namespace cSharpTools
 {
@@ -30,8 +25,8 @@ namespace cSharpTools
         private string htmlAttributesRegex;
         private string[] blackListedHtmlAtributes = { };
 
-        private int wordsIdentifiedCount;
-        private int wordsTranslatedCount;
+        private int wordsIdentifiedCount = 0;
+        private int wordsTranslatedCount = 0;
         private int wordsNotTranslatedCount;
         private List<string> notTranslatedWords = new List<string>();
 
@@ -40,7 +35,6 @@ namespace cSharpTools
 
         //VARIABLES PARA  DEPURACIÓN###################################################################
         private Log LogDebug;
-        private Log LogNewTranslatorFunction;
         private const bool enableDebugLog = true;
         private const string debugLogPath = "C:/Debuger";
         private const string debugLogName = "debug";
@@ -86,9 +80,10 @@ namespace cSharpTools
             if (enableDebugLog)
             {
                 this.LogDebug = new Log("C:/Debuger", "debug", "txt");
-                this.LogNewTranslatorFunction = new Log("C:/Testing", "new_translator_function", "txt");
             }
+            Testing_traductor.TestingFunction("a", html);
         }
+
 
         /// <summary>
         /// - tagsToTranslate: Array de tags HTML que se va a traducir. Si no se establece se usran las predeterminadas<br></br>
@@ -167,12 +162,10 @@ namespace cSharpTools
                 return htmlTranslated;
             }
             catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return html; }
-            //ELIMINAR PARA PRUEBA EN VIVO----------
             finally
             {
                 LogDebug?.Writte($"TranslateHTML END");
             }
-            //ELIMINAR PARA PRUEBA EN VIVO----------
         }
 
         /// <summary>
@@ -217,7 +210,6 @@ namespace cSharpTools
                 LogDebug?.Writte($"\t\tProcesstag END" + Environment.NewLine + Environment.NewLine + Environment.NewLine);
             }
         }
-
         private string TranslateInnerTextOfTagAndAttribute(string tag, Match match)
         {
             //declaraciones temporales, borrar para versión final

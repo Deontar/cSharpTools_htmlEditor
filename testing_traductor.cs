@@ -1,20 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
 
 namespace cSharpTools
 {
-    /// <summary>
-    /// 
-    /// </summary>
     public class Testing_traductor
     {
+        Log LogTesting_traductor;
 
-        /// <summary>
-        /// 
-        /// </summary>
         public bool CheckForBlackListed(string text, string[] blackListedHtmlAtributes)
         {
             foreach (string atribute in blackListedHtmlAtributes)
@@ -24,55 +16,70 @@ namespace cSharpTools
             return false;
         }
 
-
-        /// <summary>
-        /// Encuentra el índice de un texto dentro de un arreglo de strings.<br></br>
-        /// - text El texto que estás buscando.<br></br>
-        /// - arrayOfStrings El arreglo donde buscar.<br></br>
-        /// <returns>El índice del texto si se encuentra, o -1 si no.</returns>
-        /// </summary>
-        public int IndexOfTextInArray(string text, string[] arrayOfStrings)
+        public void TestingFunction(string text, string html)
         {
-            if (text == null) throw new ArgumentNullException("text can not be null");
-            if (arrayOfStrings == null) throw new ArgumentNullException("array can not be null");
-            if (arrayOfStrings.Length == 0) throw new ArgumentNullException("array can not be of 0 lenght");
+            StartLog();
 
-            text = text.Trim().ToLower();
-            try
+            HtmlEditor htmlEditor = new HtmlEditor(html);
+
+            PrintTags(htmlEditor.GetTagCollection(text));
+        }
+
+        private void StartLog()
+        {
+            this.LogTesting_traductor = new Log("C:/Testing", "PrintTags", "txt");
+        }
+
+        private void PrintTags(TagCollection varTagCollection)
+        {
+            /*Estructura de variable TagCollection
+             * TagCollection ─┐
+             *              Tag ─┐
+             *                Name: Name of the Tag
+             *                InnerText: Innertext of the tag
+             *                InnerText Attribute─┐
+             *                                 Name: Name of the attribute
+             *                                 Value: Value of the name
+             *                                 ValueCollection─┐
+             *                                                Name:  Name of the value
+             *                                                Value: Value or List of Values of the attribute
+             *                TAG Attribute ─┐
+             *                            Name: Name of the attribute
+             *                            Value: Value of the name
+             *                                 ValueCollection─┐
+             *                                                Name:  Name of the value
+             *                                                Value: Value or List of Values of the attribute
+             */
+            LogTesting_traductor.Writte($"Numero de tags: {varTagCollection.Count - 1}");
+            int index1 = 0;
+            foreach (var tag in varTagCollection.Tags)
             {
-                // Initialize the start and end indices for binary search
-                int desde = 0;
-                int hasta = arrayOfStrings.Length - 1;
-
-                // Perform binary search
-                while (desde <= hasta)
+                LogTesting_traductor.Writte($"TAG{index1}─┐");
+                LogTesting_traductor.Writte($"  name: {tag.Name}");
+                LogTesting_traductor.Writte($"  InnerText: {tag.InnerText.Value}");
+                foreach (Attribute attribute in tag.InnerText.Attribute)
                 {
-                    // Calculate the middle index
-                    int medio = desde + (hasta - desde) / 2;
-
-                    // Check if the middle element matches the search text
-                    if (arrayOfStrings[medio].Trim().ToLower() == text)
+                    LogTesting_traductor.Writte($"  INNERTEXT ATTRIBUTE{attribute.Count}─┐");
+                    LogTesting_traductor.Writte($"                   Name: {attribute.Name}");
+                    foreach (string individualValue in attribute.Value)
                     {
-                        return medio; // Return the index if found
-                    }
-                    // If the middle element is less than the search text, search in the right half
-                    else if (string.Compare(arrayOfStrings[medio].Trim().ToLower(), text) < 0)
-                    {
-                        desde = medio + 1;
-                    }
-                    // If the middle element is greater than the search text, search in the left half
-                    else
-                    {
-                        hasta = medio - 1;
+                        LogTesting_traductor.Writte($"                   Value{attribute.Count}: {individualValue}");
                     }
                 }
-
-                // If not found, return -1
-                return -1;
-            }
-            catch (Exception e)
-            {
-                throw e;
+                if (tag.Attribute != null && tag.Attribute.Count > 0)
+                {
+                    foreach (var attribute in tag.Attribute)
+                    {
+                        LogTesting_traductor.Writte($"  ATTRIBUTE{attribute.Count}─┐");
+                        LogTesting_traductor.Writte($"              Name: {attribute.Name}");
+                        foreach (string individualValue in  attribute.Value)
+                        {
+                            LogTesting_traductor.Writte($"              Value{attribute.Count}: {individualValue}");
+                        }
+                    }
+                }
+                LogTesting_traductor.Writte("\n\n");
+                index1++;
             }
         }
     }
