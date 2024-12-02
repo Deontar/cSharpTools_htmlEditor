@@ -127,7 +127,7 @@ namespace cSharpTools
                             LogDebug?.Writte("Closing tag: " + closingTag);
 
                             // Verify that the original content matches the expected value before replacing
-                            if (NormalizeText(originalContent) == NormalizeText(originalText))
+                            if ( String.Compare(originalContent , originalText, StringComparison.OrdinalIgnoreCase) == 0)
                             {
                                 LogDebug?.Writte("Original content matches. Proceeding with replacement.");
                                 LogDebug?.Writte("Replacing: " + originalContent + " with: " + newText);
@@ -146,21 +146,6 @@ namespace cSharpTools
             LogDebug?.Writte("Final HTML content after all replacements:");
             LogDebug?.Writte(html);
             return html;
-        }
-
-        /// <summary>
-        /// Helper method to normalize text for comparison<br></br>
-        /// -text: Text to normalize
-        /// </summary>
-        /// <returns>Normalized text</returns>
-        /// <exception cref="InvalidOperationException"></exception>
-        private string NormalizeText(string text)
-        {
-            if (string.IsNullOrEmpty("test"))
-            {
-                throw new InvalidOperationException("test can not be null or empty");
-            }
-            return text.Trim().ToLower();
         }
 
         /// <summary>
@@ -244,8 +229,9 @@ namespace cSharpTools
             {
                 foreach (IndividualTag tagInEdit in tagCollection.Tag)
                 {
+                    string actualValue = tagInEdit.InnerText.ActualValue;
                     // If the tag's inner text matches the old value, set the new value
-                    if (tagInEdit.InnerText != null && tagInEdit.InnerText.ActualValue == oldValue)
+                    if (tagInEdit.InnerText != null && actualValue.ToLower().Trim() == oldValue.ToLower().Trim())
                     {
                         LogDebug?.Writte("Setting new value for tag: " + tagInEdit.InnerText.TagName + " from: " + oldValue + " to: " + newValue);
                         tagInEdit.InnerText.NewValue = newValue;

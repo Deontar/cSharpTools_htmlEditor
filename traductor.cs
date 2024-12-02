@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Web;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace cSharpTools
 {
@@ -130,14 +129,15 @@ namespace cSharpTools
                 {
                     foreach (IndividualTag tag in tagCollection.Tag)
                     {
-                        string actualInnerText = tag.InnerText.ActualValue.ToLower().Trim();
+                        string actualInnerText = tag.InnerText.ActualValue;
                         int indexTranslate = IndexOfTextInArray(actualInnerText, referenceLang);
                         if (indexTranslate != -1)
                         {
-                            if (referenceLang[indexTranslate].ToLower().Trim() == actualInnerText)
+                            if (referenceLang[indexTranslate].ToLower().Trim() == actualInnerText.ToLower().Trim())
                             {
-                                LogDebug?.Writte($"{actualInnerText} -> {translateLang[indexTranslate]}");
-                                innerTextEditor.AddNewValue(actualInnerText, translateLang[indexTranslate]);
+                                string newInnerText = MatchFormat(actualInnerText.Trim(), translateLang[indexTranslate]);
+                                LogDebug?.Writte($"{actualInnerText} -> {newInnerText}");
+                                innerTextEditor.AddNewValue(actualInnerText, newInnerText);
                             }
                             else
                             {
@@ -146,14 +146,8 @@ namespace cSharpTools
                         }
                         else
                         {
-                            LogDebug?.Writte($"\tNotTranslated:{actualInnerText}");
-                            if(!String.IsNullOrEmpty(actualInnerText) && !IsOnlyNumbers(actualInnerText) && !ContainsEmoji(actualInnerText))
-                            {
-                                if (!actualInnerText.Contains("<") || !actualInnerText.Contains(">"))
-                                {
-                                    LogNotTranslated.WritteWeeklyLog(actualInnerText);
-                                }
-                            }
+                            LogDebug?.Writte($"\tNotTranslated:{actualInnerText.ToLower().Trim()}");
+                            LogNotTranslated.WritteWeeklyLog(actualInnerText);
                         }
                     }
                 }
@@ -168,7 +162,7 @@ namespace cSharpTools
 
             return htmlTranslated;
         }
-        
+
         /// <summary>
         /// Encuentra el índice de un texto dentro de un arreglo de strings.<br></br>
         /// - text El texto que estás buscando.<br></br>
@@ -254,30 +248,36 @@ namespace cSharpTools
         }
 
         /// <summary>
-        /// Checks if the input string contains any emoji in the Unicode format (e.g., &#9993;).<br></br>
-        /// -input: The string to be checked.
+        /// Adjusts the formatting of the objective text to match the format of the reference text.<br></br>
+        /// The format is determined as either all uppercase, all lowercase, or only the first letter capitalized.<br></br>
+        /// -referenceText: The text whose format will be used as a reference<br></br>
+        /// -objectiveText: The text to be adjusted to match the format of the reference text<br></br>
         /// </summary>
-        /// <returns>True if an emoji is detected, otherwise False.</returns>
-        /// <returns></returns>
-        public static bool ContainsEmoji(string input)
+        /// <returns>A string with the objective text formatted to match the reference text.</returns>
+        public static string MatchFormat(string referenceText, string objectiveText)
         {
-            // Regex to detect emoji in Unicode format (e.g., &#9993;)
-            string emojiPattern = @"&#\d+;";
-            return Regex.IsMatch(input, emojiPattern);
-        }
+            if (string.IsNullOrEmpty(referenceText) || string.IsNullOrEmpty(objectiveText))
+            {
+                return objectiveText; // Return as is if either text is null or empty
+            }
 
-        /// <summary>
-        /// Checks if the input string contains only numeric characters.<br></br>
-        /// -input: The string to validate
-        /// </summary>
-        /// <returns>True if the string contains only numbers, otherwise False.</returns>
-        public static bool IsOnlyNumbers(string input)
-        {
-            // Regex pattern to match a string that contains only numeric characters (0-9)
-            string pattern = @"^\d+$";
+            // Determine the format of the reference text
+            if (referenceText.All(char.IsUpper))
+            {
+                return objectiveText.ToUpper(); // All uppercase
+            }
+            else if (referenceText.All(char.IsLower))
+            {
+                return objectiveText.ToLower(); // All lowercase
+            }
+            else if (char.IsUpper(referenceText[0]) && referenceText.Skip(1).All(char.IsLower))
+            {
+                // Capitalize the first letter, lowercase the rest
+                return char.ToUpper(objectiveText[0]) + objectiveText.Substring(1).ToLower();
+            }
 
-            // Return true if the input matches the pattern, otherwise false
-            return Regex.IsMatch(input, pattern);
+            // Default case: return objectiveText as is
+            return objectiveText;
         }
     }
 }
