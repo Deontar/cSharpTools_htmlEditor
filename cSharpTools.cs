@@ -16,13 +16,23 @@ public class cSharpTools
     private string htmlTranslated;
     private string debugFilePath = Path.Combine("C:\\Debuger", $"debug_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
     private int wordsIdentifiedCount = 0;
+    private int wordsTranslatedCount = 0;
     private int wordsNotTranslatedCount = 0;
+    private List<string> translatedWords = new List<string>();
+    private List<string> notTranslatedWords = new List<string>();
     private const string HtmlAttributes = "href|target|download|hreflang|rel|type|for|form|style|class|lang|role|tabindex";
 
-    // Constructor para inicializar los datos necesarios para la traducción
+    // Procesa una etiqueta específica dentro del HTML usando Regex para identificar sus atributos y su contenido.
+    // Regex pattern explanation:
+    // - `<\s*{tag}`: Busca la etiqueta de apertura, permitiendo espacios en blanco después del símbolo '<'.
+    // - `([^>]*)`: Captura todos los atributos de la etiqueta en el primer grupo de captura (Group 1).
+    // - `>(.*?)<\/\s*{tag}\s*>`: Captura el contenido entre las etiquetas de apertura y cierre en el segundo grupo de captura (Group 2).
+    //   Usa `.*?` para hacer una búsqueda no codiciosa y capturar el mínimo necesario.
     public cSharpTools(string html, string[] lang, int referenceLangNum, int translateLangNum, string[] tagsToTranslate = null)
     {
-        if (lang == null || html == null) return;
+        if (lang == null) throw new ArgumentNullException(nameof(lang), "El array de idiomas no puede ser nulo.");
+        if (html == null) throw new ArgumentNullException(nameof(html), "El HTML no puede ser nulo.");
+        if (referenceLangNum == translateLangNum) throw new ArgumentException("El idioma de referencia no puede ser el mismo que el idioma de traducción.");
 
         this.lang = lang;
         this.referenceLangNum = referenceLangNum;
@@ -52,10 +62,12 @@ public class cSharpTools
         }
 
         LogDebug($"Palabras identificadas: {wordsIdentifiedCount}");
+        LogDebug($"Palabras traducidas: {wordsTranslatedCount}");
         LogDebug($"Palabras no traducidas: {wordsNotTranslatedCount}");
         LogDebug($"largo html: {html.Length}\rlargo htmlTranslated: {htmlTranslated.Length}");
         // Devolver el HTML traducido
         LogDebug("TranslateHTML end");
+        GenerateSummary();
         return htmlTranslated;
     }
 
@@ -106,11 +118,14 @@ public class cSharpTools
         {
             string translatedText = translateLang[index];
             LogDebug($"\t\t\t --> Reemplazando '{originalText}' con '{translatedText}'");
+            translatedWords.Add(originalText);
+            wordsTranslatedCount++;
             return $"<{tag}{updatedAttributes}>{translatedText}</{tag}>";
         }
         else
         {
             LogDebug($"\t\tNo se encontró traducción para el texto: '{originalText}'");
+            notTranslatedWords.Add(originalText);
             wordsNotTranslatedCount++;
             return match.Value;
         }
@@ -147,6 +162,28 @@ public class cSharpTools
         catch (Exception e)
         {
             Console.WriteLine($"Error al escribir en el archivo de depuración: {e.Message}");
+        }
+    }
+
+    private void GenerateSummary()
+    {
+        LogDebug("\r\n--- Resumen de Traducción ---");
+        LogDebug($"Palabras identificadas: {wordsIdentifiedCount}");
+        LogDebug($"Palabras traducidas: {wordsTranslatedCount}");
+        LogDebug($"Palabras no traducidas: {wordsNotTranslatedCount}");
+
+        LogDebug("\r\n--- Palabras traducidas ---");
+        LogDebug("[palabra tratada para comparación]\t\t\t[palabra en formato original]");
+        foreach (var translated in translatedWords)
+        {
+            LogDebug($"{translated.ToLower().Trim()}\t\t\t{translated}");
+        }
+
+        LogDebug("\r\n--- Palabras no traducidas ---");
+        LogDebug("[palabra tratada para comparación]\t\t\t[palabra en formato original]");
+        foreach (var notTranslated in notTranslatedWords)
+        {
+            LogDebug($"{notTranslated.ToLower().Trim()}\t\t\t{notTranslated}");
         }
     }
 }
