@@ -26,11 +26,12 @@ namespace cSharpTools
         private List<string> notTranslatedWords = new List<string>();
 
         private Log LogNotTranslated;
+        private Log notInDicionary;
         private Log LogErrors;
 
         //VARIABLES PARA  DEPURACIÓN###################################################################
         private Log LogDebug;
-        private const bool enableDebugLog = true;
+        private bool enableDebugLog = false;
         private const string debugLogPath = "C:/Debuger";
         private const string debugLogName = "debug";
         private const string debugLogFormat = "txt";
@@ -49,19 +50,20 @@ namespace cSharpTools
             //MMM edu averiguar directorio de runtime y usarlo de prefijo del fichero
             string actuallDirectoryPath = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory);
             string notTranslatedFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/Nottranslated");
+            string notInDicionaryFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/NsotInDiccionary");
             string errorsFilePath = Path.Combine(actuallDirectoryPath + "/../log/traductor/errors");
 
-            this.LogNotTranslated = new Log(notTranslatedFilePath, "NOT_translated_words_", "txt");
+            this.LogNotTranslated = new Log(notTranslatedFilePath, "not_translated_words_", "txt");
+            this.notInDicionary = new Log(notInDicionaryFilePath, "words_not_in_dictionary_", "txt");
             this.LogErrors = new Log(errorsFilePath, "error_traductor", "txt");
 
             this.lang = lang;
-            this.referenceLangNum = referenceLangNum;
-            this.translateLangNum = translateLangNum;
             this.referenceLang = LangToIndividualArray(referenceLangNum);
             this.translateLang = LangToIndividualArray(translateLangNum);
+            this.referenceLangNum = referenceLangNum;
+            this.translateLangNum = translateLangNum;
             this.html = html;
             this.htmlTranslated = html;
-
 
             if (enableDebugLog)
             {
@@ -69,6 +71,29 @@ namespace cSharpTools
             }
         }
 
+        private void checkForErrors()
+        {
+            if (lang == null)
+            {
+                throw new InvalidOperationException("lang can not be null");
+            }
+            else if (lang.Length == 0)
+            {
+                throw new InvalidOperationException("lang can not be of lenght 0");
+            }
+            else if (referenceLangNum < 0)
+            {
+                throw new IndexOutOfRangeException("referenceLangNum can not be < 0  referenceLangNum: " + referenceLangNum);
+            }
+            else if (translateLangNum < 0)
+            {
+                throw new IndexOutOfRangeException("translateLangNum can not be < 0  translateLangNum: " + translateLangNum);
+            }
+            else if (string.IsNullOrEmpty(html))
+            {
+                throw new InvalidOperationException("html can not be null or empty");
+            }
+        }
 
         /// <summary>
         /// - tagsToTranslate: String list de tags HTML que se va a traducir. Si no se establece se usran las predeterminadas<br></br>
@@ -85,14 +110,21 @@ namespace cSharpTools
         /// <returns>HTML traducido</returns>
         public string TranslateHTML()
         {
-            if(checkForErrors() == true) { return html; }
+            try
+            {
+                checkForErrors();
+            }
+            catch (Exception e)
+            {
+                LogErrors.WritteWeeklyLog(e.ToString());
+            }
 
             try
             {
                 InnerTextEditor innerTextEditor = new InnerTextEditor(html, tagsToTranslate);
                 BigTagCollection bigTagCollection = innerTextEditor.GetBigTagCollection();
 
-                foreach (TagCollection tagCollection in bigTagCollection.TagCollection)
+                foreach (TagCollection tagCollection in bigTagCollection.TagCollections)
                 {
                     foreach (IndividualTag tag in tagCollection.Tag)
                     {
@@ -100,7 +132,7 @@ namespace cSharpTools
                         int indexTranslate = IndexOfTextInArray(actualInnerText, referenceLang);
                         if (indexTranslate != -1)
                         {
-                            LogDebug?.Writte($"{referenceLang[indexTranslate].ToLower()} =? {actualInnerText.Trim().ToLower()}");
+                            LogDebug?.Writte($"{referenceLang[indexTranslate].Trim().ToLower()} =? {actualInnerText.Trim().ToLower()}");
                             if (referenceLang[indexTranslate].Trim().ToLower() == actualInnerText.Trim().ToLower())
                             {
                                 LogDebug?.Writte($"{actualInnerText.Trim().ToLower()} -> {translateLang[indexTranslate]}");
@@ -108,7 +140,7 @@ namespace cSharpTools
                             }
                             else
                             {
-                                LogNotTranslated.WritteWeeklyLog(actualInnerText);
+                                LogNotTranslated.WritteWeeklyLog($"DB:{referenceLang[indexTranslate].Trim().ToLower()} =? html:{actualInnerText.Trim().ToLower()}");
                             }
                         }
                         else
@@ -128,13 +160,14 @@ namespace cSharpTools
 
             return htmlTranslated;
         }
-        
+
         /// <summary>
         /// Encuentra el índice de un texto dentro de un arreglo de strings.<br></br>
         /// - text El texto que estás buscando.<br></br>
         /// - arrayOfStrings El arreglo donde buscar.<br></br>
         /// <returns>El índice del texto si se encuentra, o -1 si no.</returns>
         /// </summary>
+        /// <exception cref="ArgumentNullException"></exception>
         public int IndexOfTextInArray(string text, string[] arrayOfStrings)
         {
             if (text == null) throw new ArgumentNullException("text can not be null");
@@ -180,60 +213,34 @@ namespace cSharpTools
             }
         }
 
-        private bool checkForErrors()
-        {
-
-            //Control de errores
-            if (lang == null)
-            {
-                LogErrors.WritteWeeklyLog("El array de idiomas no puede ser nulo.");
-                return true;
-            }
-            else if (html == null)
-            {
-                LogErrors.WritteWeeklyLog("El HTML no puede ser nulo.");
-                return true;
-            }
-            else if (referenceLangNum == translateLangNum)
-            {
-                LogErrors.WritteWeeklyLog("El idioma de referencia no puede ser el mismo que el idioma de traducción.");
-                return true;
-            }
-            else if (referenceLangNum < 0)
-            {
-                LogErrors.WritteWeeklyLog("El idioma de referencia no puede ser negativo");
-                return true;
-            }
-            else if (translateLangNum < 0)
-            {
-                LogNotTranslated.WritteWeeklyLog("El idioma de traducción no puede ser negativo");
-                return true;
-            }
-            return false;
-        }
-
         /// <summary>
         /// Convierte el array de idiomas en un array de strings basado en la posición especificada<br></br>
         /// - position: La posición en el array de idiomas
         /// </summary>
         /// <returns>Array de strings para el idioma especificado</returns>
+        /// <exception cref="IndexOutOfRangeException"></exception>
         public string[] LangToIndividualArray(int position)
         {
+            int numberOfitemsInarray = (lang[0].Split(new[] { "|" }, StringSplitOptions.None)).Length;
+            if (position > numberOfitemsInarray)
+            {
+                throw new IndexOutOfRangeException("Position index out of range, position: " + position + " limit: " + numberOfitemsInarray);
+            }
             try
             {
-                var result = new List<string>();
-                foreach (var item in lang)
-                {
-                    if (item != null)
+                    var result = new List<string>();
+                    foreach (var item in lang)
                     {
-                        var parts = item.Split(new[] { "|" }, StringSplitOptions.None);
-                        if (position < parts.Length)
+                        if (item != null)
                         {
-                            result.Add(parts[position]);
+                            var parts = item.Split(new[] { "|" }, StringSplitOptions.None);
+                            if (position < parts.Length)
+                            {
+                                result.Add(parts[position]);
+                            }
                         }
                     }
-                }
-                return result.ToArray();
+                    return result.ToArray();
             }
             catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
         }
