@@ -203,15 +203,7 @@ namespace cSharpTools
                     decimal nbr;
                     if (!decimal.TryParse(innerText, out nbr)) // MMMedu no traducir numeros
                     {
-                        string newTranslatorFunction = TranslateInnerTextOfTagAndAttribute(tag, match);
-                        string updatedAttributes = TranslateInnerTextOfAtributes(attributes);
-                        string temp = TranslateInnerTextOfTag(tag, updatedAttributes, innerText, match);
-                        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-                        LogNewTranslatorFunction.Writte($"newTranslator function:\r{newTranslatorFunction}");
-                        LogNewTranslatorFunction.Writte($"actual translator:\r{temp}");
-                        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-                        return temp;
-                        //return translateTagInnerText(tag, match)
+                        return TranslateInnerTextOfTagAndAttribute(tag, match);
                     }
                     else
                     {
@@ -226,89 +218,46 @@ namespace cSharpTools
             }
         }
 
-        /// <summary>
-        /// Procesa y traduce los atributos de una etiqueta HTML si corresponde<br></br>
-        /// - attributes: Los atributos de la etiqueta HTML
-        /// </summary>
-        /// <returns>Atributos traducidos.</returns>
-        private string TranslateInnerTextOfAtributes(string attributes)
+        private string TranslateInnerTextOfTagAndAttribute(string tag, Match match)
         {
-            try
-            {
-                LogDebug?.Writte($"\r\t\t\t\tTranslateInnerTextOfAtributes START");
-                string pattern = @"(\b(?:" + htmlAttributesRegex + @")\s*=\s*"")([^""]+)(\""|\')";
-                return Regex.Replace(attributes, pattern, attrMatch =>
-                {
-                    LogDebug?.Writte($"\t\t\t\t\treferenceText:\t{attributes}");
-                    LogDebug?.Writte($"\t\t\t\t\tpattern2:\t{pattern}");
-                    LogDebug?.Writte($"\t\t\t\t\tMatch2:\t{attrMatch}");
-                    LogDebug?.Writte($"\t\t\t\t\tatributes2:\t{attrMatch.Groups[1].Value}");
-                    LogDebug?.Writte($"\t\t\t\t\tinnerText2:\t{attrMatch.Groups[2].Value}");
+            //declaraciones temporales, borrar para versión final
+            string htmlAttrRegex = "";
 
-                    string attributeName = attrMatch.Groups[1].Value;
-                    string attributeValue = attrMatch.Groups[2].Value;
-                    //Early leave si encuentra un atributo de la lista negra en el attrMatch.Value (lo que ha encontrado)
-                    try
-                    {
-                        int index = IndexOfTextInArray(attributeValue, referenceLang);
-                        if (index != -1 && index < translateLang.Length && !string.IsNullOrWhiteSpace(attributeValue))
-                        {
-                            string translatedAttrValue = translateLang[index];
-                            return $"{attributeName}{translatedAttrValue}{attrMatch.Groups[3].Value}";
-                        }
-                        else
-                        {
-                            notTranslatedWords.Add(attributeValue.Trim().ToLower());
-                            wordsNotTranslatedCount++;
-                        }
-                        return attrMatch.Value;
-                    }
-                    catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
-                }, RegexOptions.IgnoreCase);
-            }
-            catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
-            finally
-            {
-                LogDebug?.Writte($"\t\t\t\tTranslateInnerTextOfAtributes END");
-            }
-        }
-
-        /// <summary>
-        /// Traduce el texto contenido dentro de una etiqueta HTML específica<br></br>
-        /// - tag: La etiqueta HTML procesada<br></br>
-        /// - updatedAttributes: Los atributos de la etiqueta después de ser procesados<br></br>
-        /// - originalText: El texto original dentro de la etiqueta HTML<br></br>
-        /// - match: La coincidencia de la etiqueta HTML en el contenido
-        /// </summary>
-        /// <returns>Texto traducido junto con la etiqueta HTML</returns>  
-        private string TranslateInnerTextOfTag(string tag, string updatedAttributes, string innerText, Match match)
-        {
+            string attribute = match.Groups[1].Value;
+            string innerText = match.Groups[2].Value;
             string originalText = innerText;
-            LogDebug?.Writte($"\r\t\t\t\tTranslateInnerTextOfTag START");
-            try
+            string regexPatternAttr = @"(\b(?:" + htmlAttrRegex + @")\s*=\s*"")([^""]+)(\""|\')";
+            string updatedAttributes = Regex.Replace(attribute, regexPatternAttr, attrMatch =>
             {
-                //Obtiene el indice de referenceLang con el texto originalText que coincida con el primer resultado de referenceLang
-                int index = IndexOfTextInArray(originalText, referenceLang);
-                if (index != -1 && index < translateLang.Length && !string.IsNullOrWhiteSpace(originalText))
+                string codeOfAtribute = attrMatch.Groups[1].Value;
+                string valueOfAtribute = attrMatch.Groups[2].Value;
+                int indexOfValueOfAttr = IndexOfTextInArray(valueOfAtribute, referenceLang);
+                if (indexOfValueOfAttr != -1 && indexOfValueOfAttr < translateLang.Length && !string.IsNullOrWhiteSpace(valueOfAtribute))
                 {
-                    string translatedText = translateLang[index];
-                    wordsTranslatedCount++;
-
-                    LogDebug?.Writte($"\t\t\t\t\t{originalText} = {translateLang[index]}");
-
-                    return $"<{tag}{updatedAttributes}>{translatedText}</{tag}>";
+                    string translatedValueOfAtribute = translateLang[indexOfValueOfAttr];
+                    return $"{codeOfAtribute}{translatedValueOfAtribute}{attrMatch.Groups[3].Value}";
                 }
                 else
                 {
-                    notTranslatedWords.Add(originalText.Trim().ToLower());
+                    notTranslatedWords.Add(valueOfAtribute.Trim().ToLower());
                     wordsNotTranslatedCount++;
-                    return match.Value;
                 }
-            }
-            catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
-            finally
+                return attrMatch.Value;
+            }, RegexOptions.IgnoreCase);
+            int index = IndexOfTextInArray(originalText, referenceLang);
+
+            //traduccir innertext de tag
+            if (index != -1 && index < translateLang.Length && !string.IsNullOrWhiteSpace(originalText))
             {
-                LogDebug?.Writte($"\t\t\t\tTranslateInnerTextOfTag END");
+                string translatedText = translateLang[index];
+
+                return $"<{tag}{updatedAttributes}>{translatedText}</{tag}>";
+            }
+            else
+            {
+                notTranslatedWords.Add(originalText.Trim().ToLower());
+                wordsNotTranslatedCount++;
+                return match.Value;
             }
         }
 
@@ -388,55 +337,5 @@ namespace cSharpTools
             }
             catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
         }
-
-
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        private string TranslateInnerTextOfTagAndAttribute(string tag, Match match)
-        {
-            //declaraciones temporales, borrar para versión final
-            string htmlAttrRegex = "";
-
-            string attribute = match.Groups[1].Value;
-            string innerText = match.Groups[2].Value;
-            string originalText = innerText;
-            //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            string regexPatternAttr = @"(\b(?:" + htmlAttrRegex + @")\s*=\s*"")([^""]+)(\""|\')";
-            string updatedAttributes = Regex.Replace(attribute, regexPatternAttr, attrMatch =>
-            {
-                string codeOfAtribute = attrMatch.Groups[1].Value;
-                string valueOfAtribute = attrMatch.Groups[2].Value;
-                int indexOfValueOfAttr = IndexOfTextInArray(valueOfAtribute, referenceLang);
-                if (indexOfValueOfAttr != -1 && indexOfValueOfAttr < translateLang.Length && !string.IsNullOrWhiteSpace(valueOfAtribute))
-                {
-                    string translatedValueOfAtribute = translateLang[indexOfValueOfAttr];
-                    return $"{codeOfAtribute}{translatedValueOfAtribute}{attrMatch.Groups[3].Value}";
-                }
-                else
-                {
-                    notTranslatedWords.Add(valueOfAtribute.Trim().ToLower());
-                    wordsNotTranslatedCount++;
-                }
-                return attrMatch.Value;
-            }, RegexOptions.IgnoreCase);
-            //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            int index = IndexOfTextInArray(originalText, referenceLang);
-
-            //traduccir innertext de tag
-            if (index != -1 && index < translateLang.Length && !string.IsNullOrWhiteSpace(originalText))
-            {
-                string translatedText = translateLang[index];
-
-                return $"<{tag}{updatedAttributes}>{translatedText}</{tag}>";
-            }
-            else
-            {
-                notTranslatedWords.Add(originalText.Trim().ToLower());
-                wordsNotTranslatedCount++;
-                return match.Value;
-            }
-        }
-
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     }
-
 }
