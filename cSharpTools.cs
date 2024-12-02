@@ -1,78 +1,93 @@
-﻿using HtmlAgilityPack;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
-namespace cSharpToolsNamespace
+public class cSharpTools
 {
-    public class cSharpTools
+    private string[] lang;
+    private int referenceLangNum;
+    private int translateLangNum;
+    private string[] tagsToTranslate = { "a", "label" };
+    private string html;
+
+    // Constructor para inicializar los datos necesarios para la traducción
+    public cSharpTools(string html, string[] lang, int referenceLangNum, int translateLangNum, string[] tagsToTranslate = null)
     {
-        private string[] lang;
-        private int referenceLangNum;
-        private int translatedWordsNum;
-        private string[] tagsToReplace = { "a", "label" };
-        private string html;
-
-        // Constructor para inicializar los datos necesarios para la traducción
-        public cSharpTools(string html, string[] lang, int referenceLangNum, int translatedWordsNum, string[] tagsToReplace = null)
+        this.lang = lang;
+        this.referenceLangNum = referenceLangNum;
+        this.translateLangNum = translateLangNum;
+        if (tagsToTranslate != null)
         {
-            this.lang = lang;
-            this.referenceLangNum = referenceLangNum;
-            this.translatedWordsNum = translatedWordsNum;
-            this.tagsToReplace = tagsToReplace;
-            this.html = html;
+            this.tagsToTranslate = tagsToTranslate;
         }
+        this.html = html;
+    }
 
-        public string TranslateHTML()
+    public string TranslateHTML()
+    {
+        string[] referenceLang = LangToArray(referenceLangNum);
+        string[] translateLang = LangToArray(translateLangNum);
+
+        var referenceDict = new Dictionary<string, string>();
+        for (int i = 0; i < referenceLang.Length; i++)
         {
-            List<string> referenceLangList = LangToList(lang, referenceLangNum);
-            List<string> translatedWordsList = LangToList(lang, translatedWordsNum);
-
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-
-            // Crear una expresión XPath para las etiquetas especificadas por el usuario
-            string xpath = string.Join(" | ", tagsToReplace.Select(tag => "//" + tag));
-            var tags = doc.DocumentNode.SelectNodes(xpath);
-
-            if (tags != null)
+            if (i < translateLang.Length)
             {
-                // Iterar sobre cada etiqueta seleccionada
-                foreach (var tagValue in tags)
-                {
-                    // Iterar sobre la lista de palabras de referencia en referenceLangList
-                    for (int j = 0; j < referenceLangList.Count; j++)
-                    {
-                        if (tagValue.InnerHtml.Trim().ToLower() == referenceLangList[j].Trim().ToLower())
-                        {
-                            // Si hay coincidencia, reemplazar el contenido con la traducción correspondiente
-                            tagValue.InnerHtml = translatedWordsList[j];
-                            break;
-                        }
-                    }
-                }
+                referenceDict[referenceLang[i]] = translateLang[i];
             }
-
-            return doc.DocumentNode.InnerHtml;
         }
 
-        private List<string> LangToList(string[] lang, int position)
+        foreach (var tag in tagsToTranslate)
         {
-            var result = new List<string>();
-
-            // Iterar sobre cada elemento de la lista combinada
-            foreach (var item in lang)
+            // Crear un patrón Regex para encontrar las etiquetas especificadas
+            string pattern = $@"<({tag})\b[^>]*>(.*?)</\1>";
+            html = Regex.Replace(html, pattern, match =>
             {
-                // Dividir la cadena en partes usando '||' como delimitador
+                string innerText = match.Groups[2].Value;
+
+                // Buscar si el innerText coincide con una entrada en el diccionario de referencia
+                if (referenceDict.ContainsKey(innerText))
+                {
+                    // Obtener la traducción desde el diccionario de traducción
+                    string translatedText = referenceDict[innerText];
+                    return $"<{match.Groups[1].Value}>{translatedText}</{match.Groups[1].Value}>";
+                }
+                return match.Value;
+            }, RegexOptions.Singleline);
+        }
+
+        // Devolver el HTML traducido
+        return html;
+    }
+
+    public string[] LangToArray(int position)
+    {
+        var result = new List<string>();
+
+        // Validar que lang no sea null
+        if (lang == null)
+        {
+            throw new ArgumentNullException(nameof(lang), "El arreglo lang no puede ser null.");
+        }
+
+        foreach (var item in lang)
+        {
+            // Validar que cada item dentro de lang no sea null
+            if (item != null)
+            {
                 var parts = item.Split(new[] { "|" }, StringSplitOptions.None);
                 if (position < parts.Length)
                 {
-                    // Agregar la parte correspondiente a la posición especificada
                     result.Add(parts[position].Trim());
                 }
             }
-
-            return result;
+            else
+            {
+                Console.WriteLine("Advertencia: Se encontró un elemento null en el arreglo lang.");
+            }
         }
+
+        return result.ToArray(); // Convertir la lista a un array antes de devolverla
     }
 }
