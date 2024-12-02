@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
-using static System.Net.Mime.MediaTypeNames;
+using System.Web;
 
 namespace cSharpTools
 {
@@ -145,7 +147,13 @@ namespace cSharpTools
                         else
                         {
                             LogDebug?.Writte($"\tNotTranslated:{actualInnerText}");
-                            LogNotTranslated.WritteWeeklyLog(actualInnerText);
+                            if(!String.IsNullOrEmpty(actualInnerText) && !IsOnlyNumbers(actualInnerText) && !ContainsEmoji(actualInnerText))
+                            {
+                                if (!actualInnerText.Contains("<") || !actualInnerText.Contains(">"))
+                                {
+                                    LogNotTranslated.WritteWeeklyLog(actualInnerText);
+                                }
+                            }
                         }
                     }
                 }
@@ -160,7 +168,7 @@ namespace cSharpTools
 
             return htmlTranslated;
         }
-
+        
         /// <summary>
         /// Encuentra el índice de un texto dentro de un arreglo de strings.<br></br>
         /// - text El texto que estás buscando.<br></br>
@@ -243,6 +251,33 @@ namespace cSharpTools
                     return result.ToArray();
             }
             catch (Exception e) { LogErrors.WritteWeeklyLog(e.ToString()); return null; }
+        }
+
+        /// <summary>
+        /// Checks if the input string contains any emoji in the Unicode format (e.g., &#9993;).<br></br>
+        /// -input: The string to be checked.
+        /// </summary>
+        /// <returns>True if an emoji is detected, otherwise False.</returns>
+        /// <returns></returns>
+        public static bool ContainsEmoji(string input)
+        {
+            // Regex to detect emoji in Unicode format (e.g., &#9993;)
+            string emojiPattern = @"&#\d+;";
+            return Regex.IsMatch(input, emojiPattern);
+        }
+
+        /// <summary>
+        /// Checks if the input string contains only numeric characters.<br></br>
+        /// -input: The string to validate
+        /// </summary>
+        /// <returns>True if the string contains only numbers, otherwise False.</returns>
+        public static bool IsOnlyNumbers(string input)
+        {
+            // Regex pattern to match a string that contains only numeric characters (0-9)
+            string pattern = @"^\d+$";
+
+            // Return true if the input matches the pattern, otherwise false
+            return Regex.IsMatch(input, pattern);
         }
     }
 }
