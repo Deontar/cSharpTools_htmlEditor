@@ -1,22 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Text.RegularExpressions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace cSharpTools
 {
     public class HtmlEditor
     {
         private string html;
-        private Log logHtmlEditor;
-        private bool debug = true;
 
         public HtmlEditor(string html)
         {
             this.html = html;
-            if (debug)
-            {
-                this.logHtmlEditor = new Log("C:/Testing", "LogHtmlEditor", "txt");
-            }
         }
 
         /// <returns>A fully build Tag variable of the first match in html</returns>
@@ -24,8 +21,8 @@ namespace cSharpTools
         {
             //Original regex (not adapted to code) <\s*{texto}[^>]*>.*?<\/\s*{texto}\s*>
             string pattern = $"<\\s*{tagName}([^>]*)>(.*?)<\\/\\s*{tagName}\\s*>";
-            Match _match = Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            Tag _tag = new Tag().Build(_match);
+            Match match = Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            Tag _tag = Tag.Build(match);
             return _tag;
         }
 
@@ -34,112 +31,277 @@ namespace cSharpTools
         {
             //Original regex (not adapted to code) <\s*TEXT([^>]*)>(.*?)<\/\s*TEXT\s*>
             string pattern = $"<\\s*{tagName}([^>]*)>(.*?)<\\/\\s*{tagName}\\s*>";
-            MatchCollection matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            TagCollection _tagCollection = new TagCollection().Build(matches);
+            MatchCollection matchCollection = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            TagCollection tagCollection = TagCollection.Build(matchCollection);
 
-            return _tagCollection;
+            return tagCollection;
         }
     }
-    
-    /// <summary>
-    /// A list of Tag variables
-    /// </summary>
+
+    public class InnerTextEditor_old
+    {
+        private string html;
+        private string pattern;
+        TagInEditCollection tagInEditCollection;
+        private int currentIndex = 0;
+
+        public InnerTextEditor_old(string html, string tagName)
+        {
+            this.html = html;
+            //Original regex (not adapted to code) <\s*TEXT([^>]*)>(.*?)<\/\s*TEXT\s*>
+            this.pattern = $"<\\s*{tagName}([^>]*)>(.*?)<\\/\\s*{tagName}\\s*>";
+        }
+
+        public TagInEditCollection GetInTagCollection()
+        {
+            MatchCollection matchCollection = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            TagInEditCollection tagInEditCollection = TagInEditCollection.Build(matchCollection, html);
+            this.tagInEditCollection = tagInEditCollection;
+            return tagInEditCollection;
+        }
+
+        public string ReplaceInnerText(TagInEditCollection tagInEditCollection)
+        {
+            string[] htmlLines = html.Split('\n');
+
+            foreach (TagInEdit tagInEdit in tagInEditCollection.Tags)
+            {
+                if (tagInEdit.Tag != null)
+                {
+                    string newText = tagInEdit.Tag.InnerText.NewValue;
+                    if (!string.IsNullOrEmpty(newText))
+                    {
+                        for (int i = tagInEdit.StartLine - 1; i < tagInEdit.EndLine; i++)
+                        {
+                            int startIndex = htmlLines[i].IndexOf(tagInEdit.Tag.InnerText.Value);
+                            if (startIndex != -1)
+                            {
+                                // Reemplazar el contenido completo con el nuevo valor
+                                htmlLines[i] = htmlLines[i].Remove(startIndex, tagInEdit.Tag.InnerText.Value.Length).Insert(startIndex, newText);
+                                break; // Reemplazar solo la primera ocurrencia exacta
+                            }
+                        }
+                    }
+                }
+            }
+
+            html = string.Join("\n", htmlLines);
+            return html;
+        }
+
+        public string GetInnerText()
+        {
+            if (tagInEditCollection == null || currentIndex >= tagInEditCollection.Tags.Count) { return string.Empty; }
+
+            TagInEdit currentTagInEdit = tagInEditCollection.Tags[currentIndex];
+            currentIndex++;
+            return currentTagInEdit.Tag.InnerText.Value;
+        }
+
+        public TagInEditCollection AddNewValue(TagInEditCollection tagInEditCollection,string oldValue, string newValue)
+        {
+            foreach (TagInEdit tagInEdit in tagInEditCollection.Tags)
+            {
+                if (tagInEdit.Tag != null && tagInEdit.Tag.InnerText != null && tagInEdit.Tag.InnerText.Value == oldValue)
+                {
+                    tagInEdit.Tag.InnerText.NewValue = newValue;
+                }
+            }
+            return tagInEditCollection;
+        }
+    }
+
+    public class TagInEditCollection
+    {
+        public List<TagInEdit> Tags { get; set; } = new List<TagInEdit>();
+        public int Count { get; set; } = 0;
+
+        public static TagInEditCollection Build(MatchCollection matchCollection, string html)
+        {
+            TagInEditCollection tagInEditCollection = new TagInEditCollection();
+            foreach (Match match in matchCollection)
+            {
+                tagInEditCollection.Tags.Add(TagInEdit.Build(match,html));
+                tagInEditCollection.Count++;
+            }
+            return tagInEditCollection;
+        }
+    }
+
+    public class TagInEdit
+    {
+        internal Tag Tag { get; set; } = new Tag();
+        internal int StartLine { get; set; } = 0;
+        internal int EndLine { get; set; } = 0;
+
+        public static TagInEdit Build(Match match, string html)
+        {
+            TagInEdit tagInEdit = new TagInEdit();
+
+            tagInEdit.Tag = Tag.BuildIn(match);
+
+            // Determinar las líneas de inicio y fin de la etiqueta
+            tagInEdit.StartLine = GetLineNumber(html, match.Index);
+            tagInEdit.EndLine = GetLineNumber(html, match.Index + match.Length);
+
+            return tagInEdit;
+        }
+
+        private static int GetLineNumber(string text, int index)
+        {
+            return text.Substring(0, index).Split('\n').Length;
+        }
+    }
+
     public class TagCollection
     {
         internal List<Tag> Tags { get; set; } = new List<Tag>();
         internal int Count { get; set; } = 0;
 
+        public TagCollection()
+        {
+            Tags = new List<Tag>();
+            Count = 0;
+        }
+
         /// <summary>
         /// Builds a list of Tag variables using a MatchCollection made to a HTML<br></br>
         /// </summary>
         /// <returns>A list of fully build Tag variables</returns>
-        internal TagCollection Build(MatchCollection tagMatchCollection)
+        internal static TagCollection Build(MatchCollection matchCollection)
         {
             TagCollection tagCollection = new TagCollection();
-            foreach (Match individualTagMatch in tagMatchCollection)
+
+            foreach (Match match in matchCollection)
             {
-                try
-                {
-                    tagCollection.Tags.Add(new Tag().Build(individualTagMatch));
-                    tagCollection.Count = Count++;
-                }
-                catch
-                {
-                    tagCollection.Tags.Add(new Tag());
-                    tagCollection.Count = Count++;
-                }
+                // Construye cada Tag en el orden en que aparece
+                tagCollection.Count++;
+                Tag tag = Tag.Build(match);
+                tagCollection.Tags.Add(tag);
             }
             return tagCollection;
         }
     }
 
-    /// <summary>
-    /// 1. Tag<br></br>
-    /// 1.2 Name: Name of tag<br></br>
-    /// 1.3 InnerText: Inerr text of tag<br></br>
-    /// 1.4 Attribute: {code, value}<br></br>
-    /// 1.4.1 Name: Name of attribute<br></br>
-    /// 1.4.1 Value: Value or list of Values of the code<br></br>
-    /// </summary>
     public class Tag
     {
         internal string Name { get; set; } = null;
-        internal InnerText InnerText { get; set; } = null;
-        internal List<Attribute> Attribute { get; set; } = new List<Attribute>();
+        internal InnerText InnerText { get; set; } = new InnerText();
+        internal AttributeCollection Attributes { get; set; } = new AttributeCollection();
+        internal TagCollection NestedTags { get; set; } = new TagCollection();
+        public bool IsSelfClosing { get; set; } = false;
 
-        ///<summary>
-        /// Builds a Tag variable using the match of a tag made to an HTML<br></br>
-        /// -match: a match of a tag made to a HTML
-        ///</summary>
-        /// <returns>Fully build Tag variable</returns>
-        public Tag Build(Match individualTagMatch)
+        public Tag()
         {
-            if (!individualTagMatch.Success) throw new Exception($"Buil.Tag failed to execute due to failed match");
+            string Name = null;
+            InnerText InnerText = new InnerText();
+            AttributeCollection Attributes = new AttributeCollection();
+            TagCollection NestedTags = new TagCollection();
+            bool IsSelfClosing = false;
+        }
 
-            Tag varTag = new Tag();
-            //Pattern to get the text right after <
-            varTag.Name = Regex.Match(individualTagMatch.Value, @"(?<=<)\s*(\w+)").Value;
-            //regex para innerText y attribute
+        public static Tag Build(Match match)
+        {
+            var tag = new Tag();
 
-            varTag.InnerText = new InnerText().Build(individualTagMatch.Groups[2].Value);
-            varTag.Attribute = new Attribute().Build(individualTagMatch.Groups[1].Value);
-            return varTag;
+            // La primera parte del Match contiene la apertura del Tag y sus atributos
+            string openingTag = match.Groups[1].Value;
+
+            // La segunda parte del Match contiene el contenido interno y los Tags anidados
+            string innerContent = match.Groups[2].Value;
+
+            // Captura el nombre del Tag
+            tag.Name = GetTagName(match.Value);
+
+            //Determinar si la Tag es autocontenida o no
+            if (openingTag.EndsWith("/>"))
+            {
+                tag.IsSelfClosing = true;
+                return tag;  // Termina aquí si la Tag es autocontenida
+            }
+
+            tag.Attributes = AttributeCollection.Build(openingTag);  // Pasa solo los atributos
+
+            // Si la Tag no es autocontenida, captura el InnerText y Tags anidados
+
+            tag.InnerText.Value = InnerText.GetTrueInnerText(innerContent);
+            List<String> nestedTagsNameList = GetNestedTagsNames(innerContent);
+            if (nestedTagsNameList != null)
+            {
+                HtmlEditor nestedTagsEditor = new HtmlEditor(innerContent);
+                foreach (string nestedTagName in nestedTagsNameList)
+                {
+                    tag.NestedTags = nestedTagsEditor.GetTagCollection(nestedTagName);
+                }
+            }
+
+            return tag;
+        }
+
+        public static Tag BuildIn(Match match)
+        {
+            var tag = new Tag();
+
+            // La primera parte del Match contiene la apertura del Tag y sus atributos
+            string openingTag = match.Groups[1].Value;
+
+            // La segunda parte del Match contiene el contenido interno y los Tags anidados
+            string innerContent = match.Groups[2].Value;
+
+            // Captura el nombre del Tag
+            tag.Name = GetTagName(match.Value);
+
+            tag.Attributes = AttributeCollection.Build(openingTag);
+
+            //Determinar si la Tag es autocontenida o no
+            if (openingTag.EndsWith("/>"))
+            {
+                tag.IsSelfClosing = true;
+                return null;  // Termina aquí si la Tag es autocontenida
+            }
+
+            tag.InnerText.Value = InnerText.GetTrueInnerText(innerContent);
+
+            return tag;
+        }
+
+        public static List<String> GetNestedTagsNames(string innerContent)
+        {
+            string pattern = @"<\w+([^>]*)>";
+            List<String> result = new List<String>();
+            MatchCollection matchCollection = Regex.Matches(innerContent, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            foreach (Match match in matchCollection)
+            {
+                if (match.Success)
+                {
+                    result.Add(GetTagName(match.Value));
+                }
+            }
+            return result;
+        }
+
+        public static string GetTagName(string matchValue)
+        {
+            string patternName = @"(?<=<)\s*(\w+)";
+            Match match = Regex.Match(matchValue, patternName);
+            if (match.Success)
+            {
+                return match.Value;
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 
     public class InnerText
     {
         internal string Value { get; set; } = null;
-        internal List<Attribute> Attribute { get; set; } = new List<Attribute>();
+        internal string NewValue { get; set; } = null;
+        internal AttributeCollection Attribute { get; set; } = new AttributeCollection();
 
-        /// <summary>
-        /// -TagMatch: A regex Match done to a html tag
-        /// </summary>
-        /// <returns>A fully build InnerText variable and its attributes if it has</returns>
-        public InnerText Build(String InnerTextString)
-        {
-            InnerText varInnerText = new InnerText();
-            //Pattern to get attribute + value of the tagMatch 
-            //Original pattern (not code)   \s+\w+(?:\s*=\s*(['"]).*?\1|\s*=\s*[^>\s]+)?
-            string pattern = @"<\s*(\w+)(\s+\w+="".*?"")+\s*>(.*?)<\/\1>";
-            //Equivalent to if (match.success)
-            if (Regex.IsMatch(InnerTextString, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
-            {
-                varInnerText.Value = GetTrueInnerText(InnerTextString);
-                varInnerText.Attribute = new Attribute().Build(InnerTextString);
-            }
-            else
-            {
-                varInnerText.Value = InnerTextString;
-            }
-            return varInnerText;
-        }
-
-        /// <summary>
-        /// -TagMatch: A regex Match done to a html tag
-        /// </summary>
-        /// <returns>The true InnerText of a tag that is with the attributes</returns>
-        public String GetTrueInnerText(String InnerTextString)
+        public static String GetTrueInnerText(String InnerTextString)
         {
             //CASE 1
             //Original pattern (not code)   /^(.*?)\<[^<>]+\>.*$
@@ -174,139 +336,89 @@ namespace cSharpTools
                 return valueRegexCase3;
             }
 
-            return "";
+            return InnerTextString;
         }
     }
 
-    /// <summary>
-    /// - Code: code of attribute<br></br>
-    /// - Value: Value of the attribute<br></br>
-    /// </summary>
+    public class AttributeCollection
+    {
+        internal List<Attribute> Attributes { get; set; } = new List<Attribute>();
+        internal int Count { get; set; } = 0;
+
+        public static AttributeCollection Build(String inputText)
+        {
+            AttributeCollection attributeCollection = new AttributeCollection();
+
+            string pattern = @"(\w+)\s*=\s*['""]([^'""]*)['""]";
+
+            MatchCollection matchCollection = Regex.Matches(inputText, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            foreach (Match match in matchCollection)
+            {
+                string subName = match.Groups[1].Value;
+                string subValue = match.Groups[2].Value;
+                attributeCollection.Attributes.Add(new Attribute(subName, subValue));
+                attributeCollection.Count++;
+            }
+            return attributeCollection;
+        }
+    }
+
     public class Attribute
     {
-        internal string Name { get; set; } = null;
-        internal List<string> Value { get; set; } = default(List<string>);
-        internal int Count { get; set; } = 0;
+        internal string Name { get; set; }
+        internal string Value { get; set; }
+        internal AttributeCollection SubAttributes { get; set; }
 
-        ///<summary>
-        /// Builds a list of Attribute variables using the match of a tag made to an HTML<br></br>
-        /// -match: a match of a tag made to a HTML
-        ///</summary>
-        /// <returns>Fully built list of Attribute variables</returns>
-        internal List<Attribute> Build(String InnerTextString)
+        public Attribute(string name = null, string value = null, AttributeCollection subAttributes = null)
         {
-            List<Attribute> attributes = new List<Attribute>();
-            //Pattern to get attribute + value of the tagMatch 
-            //Original pattern (not code)   \s+\w+(?:\s*=\s*(['"]).*?\1|\s*=\s*[^>\s]+)?
-            string pattern = @"\s+\w+(?:\s*=\s*([""']).*?\1|\s*=\s*[^>\s]+)?";
-            MatchCollection atrrMatch = Regex.Matches(InnerTextString, pattern, RegexOptions.IgnoreCase);
-            int atrrCount = 0;
-            foreach (Match individualMatch in atrrMatch)
+            if (name != null) Name = name;
+            else Name = null;
+            if (value != null) Value = value;
+            else Value = null;
+            if (subAttributes != null) SubAttributes = subAttributes;
+            else SubAttributes = new AttributeCollection();
+        }
+
+        internal static Attribute Build(String inputText)
+        {
+            string pattern = @"(\w+)\s*=\s*[""']([^""']*)[""']";
+            Match match = Regex.Match(inputText, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            if (match.Success)
             {
-                if (individualMatch.Success)
+                string name = match.Groups[1].Value;
+                string value = match.Groups[2].Value;
+
+                Attribute attribute = new Attribute(name, value);
+
+                if (attribute.CountValues(value) > 0)
                 {
-                    //Pattern to individualy get the name and value of atrrMatch
-                    //Original pattern (not code) (\w+)\s*=\s*"([^"]*)"
-                    string nameValuePattern = @"(\w+)\s*=\s*['""]([^'""]*)['""]";
-                    Match nameValueMatch = Regex.Match(InnerTextString, nameValuePattern, RegexOptions.IgnoreCase);
-                    string name = nameValueMatch.Groups[1].Value;
-                    string value = nameValueMatch.Groups[2].Value;
-
-                    if (nameValueMatch.Success && CountValues(nameValueMatch.Groups[2].Value) > 1)
-                    {
-                        Attribute attribute = new Attribute();
-                        atrrCount++;
-
-                        attribute.Name = name;
-                        attribute.Value = BuildMutipleValues(nameValueMatch.Groups[2].Value);
-                        attribute.Count = atrrCount;
-
-                        attributes.Add(attribute);
-                    }
-                    else if (nameValueMatch.Success)
-                    {
-                        Attribute attribute = new Attribute();
-                        atrrCount++;
-
-                        attribute.Name = name;
-                        attribute.Value = new List<string> { value };
-                        attribute.Count = atrrCount;
-
-                        attributes.Add(attribute);
-                    }
+                    attribute.SubAttributes = AttributeCollection.Build(value);
                 }
+
+                return attribute;
             }
-            return attributes;
-        }
-
-        /// <summary>
-        /// Builds a string list of all the values in a Attribute.code<br></br>
-        /// -atrrValue: Value[2] of Match done to an Attribute and its Value<br></br>
-        /// </summary>
-        /// <returns>String List of all the values in atrrValue</returns>
-        internal List<string> BuildMutipleValues(String atrrValue)
-        {
-            // Pattern to get the attributes of Style and its values
-            string stylePattern = @"(\w+[-\w]*)\s*:\s*([^;]+);?";
-            // Creates a collection of all the matches of the pattern in atrrValue
-            MatchCollection valuesMatches = Regex.Matches(atrrValue, stylePattern, RegexOptions.IgnoreCase);
-            List<string> StyleStringList = new List<string>();
-            foreach (Match individualMatch in valuesMatches)
-            {
-                if (individualMatch.Success)
-                {
-                    StyleStringList.Add(individualMatch.Groups[2].Value);
-                }
-            }
-            return StyleStringList;
-        }
-
-        /// <summary>
-        /// -values: Value of an attribute<br></br>
-        /// </summary>
-        /// <returns>Ammount of values</returns>
-        internal int CountValues(string values)
-        {
-            // Pattern to get the individual values in case it has multiple values
-            string stylePattern = @"(\w+[-\w]*)\s*:\s*([^;]+);?";
-            MatchCollection styleMatches = Regex.Matches(values, stylePattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-            return styleMatches.Count;
-        }
-    }
-
-    public class ValueCollection
-    {
-        internal List<ValueSingle> Value { get; set; } = new List<ValueSingle>();
-        internal int Count { get; set; } = 0;
-
-        public ValueCollection Build(string atrrValue)
-        {
-            // Pattern to get the attributes of Style and its values
-            string stylePattern = @"(\w+[-\w]*)\s*:\s*([^;]+);?";
-            // Creates a collection of all the matches of the pattern in atrrValue
-            MatchCollection valuesMatches = Regex.Matches(atrrValue, stylePattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            ValueCollection valueCollection = new ValueCollection();
-            foreach (Match individualMatch in valuesMatches)
-            {
-                if (individualMatch.Success)
-                {
-                    valueCollection.Value.Add(new ValueSingle().Build(individualMatch.Groups[2].Value));
-                    valueCollection.Count++;
-                }
-            }
-            return valueCollection;
-        }
-    }
-
-    public class ValueSingle
-    {
-        internal string Name { get; set; } = "";
-        internal string Value { get; set; } = "";
-
-        public ValueSingle Build(string test)
-        {
             return null;
+        }
+
+        public int CountAttributes(string text)
+        {
+            //Pattern to get the individual attributes
+            //Original pattern (not code)   (\w+)\s*=\s*"(.*?)"
+            string pattern = @"(\w+)\s*=\s*""(.*?)""";
+            MatchCollection attributesMatches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return attributesMatches.Count;
+        }
+
+        public int CountValues(string text)
+        {
+            //Pattern to get the individual values
+            //Original pattern (not code)   \w+[-\w]*\s*:\s*([^;]+)
+            string pattern = @"\w+[-\w]*\s*:\s*([^;]+)";
+            MatchCollection valuesMatches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            return valuesMatches.Count;
         }
     }
 }
